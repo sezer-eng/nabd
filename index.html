@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>نبض - مراقب النبض والأوكسجين</title>
+<meta name="theme-color" content="#12313a">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
+<style>
+:root{--bg:#f2f5f6;--card:#fff;--ink:#12313a;--mute:#5f777f;--line:#dbe4e7;--red:#d6304a;--blue:#1b6fd1;--ok:#1f9d6b;--warn:#c27a00;--bad:#d6304a;--soft:#e8eff1}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f1a1e;--card:#172429;--ink:#e6f0f2;--mute:#8fa5ac;--line:#263a41;--red:#ff5a73;--blue:#5aa2ff;--ok:#3ccf91;--warn:#f0a82a;--soft:#1f3037}}
+:root[data-theme="dark"]{--bg:#0f1a1e;--card:#172429;--ink:#e6f0f2;--mute:#8fa5ac;--line:#263a41;--red:#ff5a73;--blue:#5aa2ff;--ok:#3ccf91;--warn:#f0a82a;--soft:#1f3037}
+*{box-sizing:border-box}
+:root{padding-top:env(safe-area-inset-top,0px)}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"IBM Plex Sans Arabic",system-ui,sans-serif;line-height:1.65}
+main{max-width:680px;margin:0 auto;padding:16px 16px 110px}
+header{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:14px}
+h1{font-size:22px;margin:0}h1 small{display:block;font-size:12px;font-weight:400;color:var(--mute)}
+h2{font-size:18px;margin:0 0 8px}h3{font-size:15px;margin:14px 0 4px}p{margin:6px 0}
+.hr{display:flex;gap:8px;align-items:center}
+.status{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--mute);background:var(--card);border:1px solid var(--line);border-radius:999px;padding:6px 12px;white-space:nowrap}
+.dot{width:10px;height:10px;border-radius:50%;background:var(--mute)}
+.dot.on{background:var(--ok)}.dot.wait{background:var(--warn)}.dot.off{background:var(--bad)}
+.ib{flex:none;width:36px;height:36px;padding:0;border-radius:50%;font-size:16px}
+.view{display:none}.view.act{display:block}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:12px}
+.grid .card{margin-bottom:0}
+.label{font-size:14px;color:var(--mute);display:flex;justify-content:space-between;align-items:center}
+.val{font-size:60px;font-weight:700;line-height:1.1;margin:8px 0 0;font-variant-numeric:tabular-nums}
+.unit{font-size:13px;color:var(--mute)}
+#bpmCard .val{color:var(--red)}#spoCard .val{color:var(--blue)}
+.tag{display:inline-block;margin-top:8px;font-size:12px;padding:2px 10px;border-radius:999px;background:var(--soft);color:var(--mute)}
+.tag.ok{color:var(--ok)}.tag.warn{color:var(--warn)}.tag.bad{color:var(--bad)}
+.heart{width:18px;height:18px;fill:var(--red)}.heart.beat{animation:b .3s ease-out}
+@keyframes b{50%{transform:scale(1.35)}}
+canvas{width:100%;height:150px;display:block;margin-top:10px}canvas.s{height:110px}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;text-align:center}
+.stats b{display:block;font-size:20px;font-variant-numeric:tabular-nums}.stats span{font-size:12px;color:var(--mute)}
+.note{padding:12px 16px;border-radius:12px;font-size:14px;background:var(--card);border:1px solid var(--line);margin-bottom:12px}
+.note.warn{border-color:var(--warn)}.note.bad{border-color:var(--bad)}
+.row{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+button{font:inherit;font-weight:600;padding:11px 14px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer;flex:1}
+button.main{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+button:focus-visible,input:focus-visible,textarea:focus-visible,nav a:focus-visible{outline:3px solid var(--blue);outline-offset:2px}
+label{font-size:13px;color:var(--mute);display:grid;gap:4px;margin-bottom:10px}
+label.ck{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--ink)}label.ck input{width:auto}
+input,textarea,select{font:inherit;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);width:100%}
+input.ltr{direction:ltr;text-align:left}
+pre{direction:ltr;text-align:left;background:var(--soft);padding:10px;border-radius:10px;overflow-x:auto;font-size:12px;margin:6px 0}
+.tw{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{padding:8px 6px;border-bottom:1px solid var(--line);text-align:right}
+td.l{direction:ltr;text-align:left;font-family:ui-monospace,Menlo,monospace;font-size:13px}
+.sw{display:inline-block;width:10px;height:10px;border-radius:50%;margin-left:6px}
+ol,ul{padding-right:20px;margin:6px 0}
+.lcd{direction:ltr;background:#7fa63a;color:#1d2a0a;font-family:ui-monospace,Menlo,monospace;font-size:20px;padding:12px 16px;border-radius:8px;border:4px solid #3c4a22;line-height:1.4;width:max-content;max-width:100%}
+nav{position:fixed;bottom:0;left:0;right:0;background:var(--card);border-top:1px solid var(--line);display:flex;padding:6px 6px calc(6px + env(safe-area-inset-bottom,0px))}
+nav a{flex:1;text-align:center;font-size:11px;padding:8px 2px;border-radius:10px;color:var(--mute);cursor:pointer;font-weight:600}
+nav a svg{width:22px;height:22px;display:block;margin:0 auto 2px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+nav a.act{color:var(--ink);background:var(--soft)}
+nav{overflow-x:auto}nav a{flex:1 0 62px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.kv{display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px solid var(--line);font-size:14px}.kv span{color:var(--mute)}.kv b{text-align:left}
+.chk{display:grid;grid-template-columns:1fr 1fr;gap:8px}.chk label.ck{margin:0;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--bg)}
+.disc{font-size:12px;color:var(--mute);text-align:center;margin-top:16px}
+.rh{display:none}
+@media print{nav,header,.noprint{display:none!important}.view{display:none!important}#v-report{display:block!important}.rh{display:block;margin-bottom:12px}body{background:#fff;color:#000}.card{break-inside:avoid}}
+</style>
+</head>
+<body>
+<main>
+<header>
+  <h1>نبض<small>مراقب النبض والأوكسجين</small></h1>
+  <div class="hr"><button class="ib" id="btnTheme" aria-label="تبديل الوضع">◐</button><div class="status"><span class="dot" id="dot"></span><span id="stxt">غير متصل</span></div></div>
+</header>
+
+<section class="view act" id="v-live">
+  <div class="grid">
+    <div class="card" id="bpmCard">
+      <div class="label"><span>معدل النبض</span><svg class="heart" id="heart" viewBox="0 0 24 24"><path d="M12 21s-8-5.3-8-11a4.6 4.6 0 0 1 8-3 4.6 4.6 0 0 1 8 3c0 5.7-8 11-8 11z"/></svg></div>
+      <div class="val" id="bpm">--</div><div class="unit">نبضة بالدقيقة</div><span class="tag" id="bpmTag">بلا قراءة</span>
+    </div>
+    <div class="card" id="spoCard">
+      <div class="label"><span>نسبة الأوكسجين</span></div>
+      <div class="val" id="spo">--</div><div class="unit">SpO₂ %</div><span class="tag" id="spoTag">بلا قراءة</span>
+    </div>
+  </div>
+  <div class="card">
+    <div class="label"><span>إشارة النبض (PPG)</span><span id="finger"></span></div>
+    <canvas id="cv" width="600" height="150"></canvas>
+  </div>
+  <div class="card stats">
+    <div><b id="sMin">--</b><span>أقل نبض</span></div>
+    <div><b id="sAvg">--</b><span>متوسط النبض</span></div>
+    <div><b id="sMax">--</b><span>أعلى نبض</span></div>
+    <div><b id="sSpo">--</b><span>متوسط SpO₂</span></div>
+  </div>
+  <div class="note" id="msg">اذهب إلى «الربط» واضغط اتصال، أو اضغط «تجربة» لرؤية الواجهة بدون جهاز.</div>
+  <label class="ck"><input type="checkbox" id="snd"> تنبيه صوتي عند القراءة الخطرة</label>
+  <div class="row"><button class="main" id="btnDemo">تجربة</button><button id="btnReset">تصفير الجلسة</button></div>
+</section>
+
+<section class="view" id="v-patient">
+  <div class="card"><h2>بيانات المريض</h2>
+    <label>الاسم<input id="pName" placeholder="الاسم الكامل"></label>
+    <div class="two"><label>العمر<input id="pAge" type="number" inputmode="numeric" min="1" max="120"></label>
+    <label>الجنس<select id="pSex"><option value="">--</option><option value="m">ذكر</option><option value="f">أنثى</option></select></label></div>
+    <div class="two"><label>الوزن (kg)<input id="pW" type="number" inputmode="decimal"></label>
+    <label>الطول (cm)<input id="pH" type="number" inputmode="decimal"></label></div>
+    <label>الأمراض المزمنة<select id="pChr"><option value="">--</option><option value="no">لا يوجد لدي أمراض مزمنة</option><option value="yes">يوجد لدي أمراض مزمنة</option></select></label>
+    <div id="chkBox" style="display:none"><div class="chk">
+      <label class="ck"><input type="checkbox" id="cAll">حساسية</label>
+      <label class="ck"><input type="checkbox" id="cDia">السكري</label>
+      <label class="ck"><input type="checkbox" id="cHyp">ارتفاع ضغط الدم</label>
+      <label class="ck"><input type="checkbox" id="cAst">الربو</label>
+      <label class="ck"><input type="checkbox" id="cHrt">أمراض القلب</label>
+      <label class="ck"><input type="checkbox" id="cKid">أمراض الكلى</label></div>
+      <label style="margin-top:10px">مرض آخر (اختياري)<input id="pOther"></label></div>
+    <label>ملاحظات<textarea id="pNote" rows="3"></textarea></label></div>
+  <div class="card"><h2>مؤشرات محسوبة</h2>
+    <div class="kv"><span>مؤشر كتلة الجسم BMI</span><b id="iBmi">--</b></div>
+    <div class="kv"><span>التصنيف</span><b id="iCls">--</b></div>
+    <div class="kv"><span>أقصى نبض (220 – العمر)</span><b id="iMax">--</b></div>
+    <div class="kv"><span>نبض الراحة الطبيعي</span><b>60 - 100</b></div>
+    <div class="kv"><span>منطقة التمرين المعتدل (50-70%)</span><b id="iZone">--</b></div>
+    <p class="unit">البيانات تُحفظ في متصفحك فقط ولا تُرسل لأي خادم.</p></div>
+</section>
+
+<section class="view" id="v-report">
+  <div class="rh"><h2>تقرير نبض</h2><div id="rdate"></div></div>
+  <div class="card"><h2>ملخص الجلسة</h2><div class="kv"><span>المريض</span><b id="kName">--</b></div><div class="kv"><span>العمر</span><b id="kAge">--</b></div><div class="kv"><span>الجنس</span><b id="kSex">--</b></div><div class="kv"><span>الوزن</span><b id="kW">--</b></div><div class="kv"><span>الطول</span><b id="kH">--</b></div><div class="kv"><span>الأمراض المزمنة</span><b id="kChr">--</b></div><div class="kv"><span>التاريخ</span><b id="kDate">--</b></div><div class="kv"><span>المدة</span><b id="kDur">--</b></div><div class="kv"><span>متوسط النبض</span><b id="kAvg">--</b></div><div class="kv"><span>الأدنى / الأعلى</span><b id="kRange">--</b></div><div class="kv"><span>عدد النبضات (تقديري)</span><b id="kBeats">--</b></div><div class="kv"><span>متوسط الأوكسجين</span><b id="kSpoAvg">--</b></div><div class="kv"><span>المصدر</span><b id="kSrc">--</b></div></div>
+  <div class="card stats">
+    <div><b id="rMin">--</b><span>أقل نبض</span></div>
+    <div><b id="rAvg">--</b><span>متوسط النبض</span></div>
+    <div><b id="rMax">--</b><span>أعلى نبض</span></div>
+    <div><b id="rSpo">--</b><span>أقل SpO₂</span></div>
+  </div>
+  <div class="card"><div class="label"><span>تغير النبض</span><span id="rCount"></span></div><canvas class="s" id="chB" width="600" height="110"></canvas>
+  <div class="label" style="margin-top:12px"><span>تغير الأوكسجين</span><span id="rDur"></span></div><canvas class="s" id="chS" width="600" height="110"></canvas></div>
+  <div class="card"><h2>الخلاصة</h2><p id="rSum">لا توجد قراءات بعد. شغّل القياس أولاً.</p></div>
+  <div class="row noprint"><button class="main" id="btnPrint">طباعة / حفظ PDF</button><button id="btnImg">صورة الموجة</button><button id="btnCsv">تصدير CSV</button></div>
+  <p class="disc">تقرير تعليمي من جهاز تجريبي، لا يغني عن الفحص الطبي.</p>
+</section>
+
+<section class="view" id="v-about">
+  <div class="card"><h2>مقدمة المشروع</h2>
+    <p>نبض جهاز صغير يقيس معدل نبض القلب ونسبة الأوكسجين بالدم من الإصبع، ويعرض القراءة على شاشة LCD مباشرة وعلى هذا الموقع عبر الإنترنت، فتتابعها من أي مكان.</p></div>
+  <div class="card"><h2>القطع المستخدمة</h2><ul>
+    <li><b>ESP32</b>: العقل المسؤول عن القراءة والحساب والإرسال عبر WiFi.</li>
+    <li><b>MAX30102</b>: حساس ضوئي أحمر وتحت أحمر يقيس النبض والأوكسجين.</li>
+    <li><b>شاشة LCD 16×2 مع وحدة I2C</b>: تعرض القراءة على الجهاز نفسه.</li>
+    <li><b>MQTT</b>: قناة الإرسال بين الجهاز والموقع.</li></ul></div>
+  <div class="card"><h2>كيف يعمل؟</h2><ol>
+    <li>تضع إصبعك على الحساس، فيضيء الضوء الأحمر وتحت الأحمر.</li>
+    <li>مع كل نبضة يتغير امتصاص الدم للضوء، والـ ESP32 يحسب منه النبض والأوكسجين.</li>
+    <li>تظهر القراءة على الـ LCD وتُرسل بنفس اللحظة للقناة.</li>
+    <li>الموقع يستلم من القناة ويعرض الأرقام والموجة والتقرير.</li></ol>
+    <h3>شكل الشاشة على الجهاز</h3><div class="lcd" id="lcdPrev">BPM: --<br>SpO2: --%</div></div>
+  <div class="card"><h2>مميزات الموقع</h2><ul>
+    <li>عرض حي للنبض والأوكسجين وموجة PPG.</li><li>تصنيف تلقائي لكل قراءة وتنبيه صوتي.</li>
+    <li>تقرير مع رسم بياني وطباعة PDF وتصدير CSV.</li><li>وضع ليلي ووضع تجربة بدون جهاز.</li></ul></div>
+</section>
+
+<section class="view" id="v-link">
+  <div class="card"><h2>ربط الجهاز بالموقع</h2>
+    <label>عنوان الخادم (MQTT عبر WebSocket)<input class="ltr" id="broker" value="wss://broker.hivemq.com:8884/mqtt"></label>
+    <label>القناة (Topic): اجعلها فريدة وبنفس حروف كود ESP32<input class="ltr" id="topic" value="nabd/dshbcy"></label>
+    <div class="row"><button class="main" id="btnConnect">اتصال</button><button id="btnStop">إيقاف</button><button id="btnSave">حفظ</button></div>
+    <div class="unit">الخادم العام يقرأ منه أي شخص يعرف القناة، فلا ترسل بيانات مرضى حقيقية عليه.</div></div>
+  <div class="card"><h2>صيغة الرسالة من ESP32</h2>
+    <pre>{"bpm":72,"spo2":98,"ir":[85000,85200,85900]}</pre>
+    <p class="unit">ir رقم أو مصفوفة عينات للموجة. إذا كانت أقل من 50000 يعتبر الإصبع غير موضوع.</p></div>
+  <div class="card"><h2>توصيل الأسلاك</h2><p class="unit">الحساس والشاشة يشتركان بنفس سلكي I2C.</p>
+    <div class="tw"><table><tr><th>القطعة</th><th>الطرف</th><th>ESP32</th></tr>
+      <tr><td>MAX30102</td><td class="l">VIN</td><td class="l">3.3V</td></tr>
+      <tr><td>MAX30102</td><td class="l">GND</td><td class="l">GND</td></tr>
+      <tr><td>MAX30102</td><td class="l">SDA</td><td class="l">GPIO21</td></tr>
+      <tr><td>MAX30102</td><td class="l">SCL</td><td class="l">GPIO22</td></tr>
+      <tr><td>LCD I2C</td><td class="l">VCC</td><td class="l">5V (VIN)</td></tr>
+      <tr><td>LCD I2C</td><td class="l">GND</td><td class="l">GND</td></tr>
+      <tr><td>LCD I2C</td><td class="l">SDA</td><td class="l">GPIO21</td></tr>
+      <tr><td>LCD I2C</td><td class="l">SCL</td><td class="l">GPIO22</td></tr></table></div>
+    <p class="unit">عنوان الـ LCD غالباً 0x27 أو 0x3F. إذا كانت مضيئة بلا حروف، دوّر المقاومة الزرقاء خلفها.</p></div>
+</section>
+
+<section class="view" id="v-med">
+  <div class="card"><h2>معدل النبض للبالغين في الراحة</h2><div class="tw"><table>
+    <tr><th>القراءة</th><th>التصنيف</th></tr>
+    <tr><td class="l">&lt; 60</td><td><span class="sw" style="background:var(--warn)"></span>بطيء (طبيعي عند الرياضيين)</td></tr>
+    <tr><td class="l">60 - 100</td><td><span class="sw" style="background:var(--ok)"></span>طبيعي</td></tr>
+    <tr><td class="l">&gt; 100</td><td><span class="sw" style="background:var(--warn)"></span>سريع (بعد جهد أو قلق أو قهوة)</td></tr></table></div></div>
+  <div class="card"><h2>نسبة الأوكسجين SpO₂</h2><div class="tw"><table>
+    <tr><th>القراءة</th><th>التصنيف</th></tr>
+    <tr><td class="l">95 - 100%</td><td><span class="sw" style="background:var(--ok)"></span>طبيعي</td></tr>
+    <tr><td class="l">90 - 94%</td><td><span class="sw" style="background:var(--warn)"></span>منخفض قليلاً، أعد القياس</td></tr>
+    <tr><td class="l">&lt; 90%</td><td><span class="sw" style="background:var(--bad)"></span>منخفض، راجع طبيباً</td></tr></table></div></div>
+  <div class="card"><h2>لقياس أدق</h2><ul>
+    <li>اجلس مرتاحاً دقيقة قبل القياس ولا تحرك يدك.</li><li>دفّئ يدك إذا كانت باردة، فالبرودة تضعف الإشارة.</li>
+    <li>أزل طلاء الأظافر الداكن أو الأظافر الصناعية.</li><li>ضع الإصبع بلطف بدون ضغط قوي.</li><li>تجنب الضوء القوي المباشر على الحساس.</li></ul></div>
+  <div class="card"><h2>متى تراجع الطبيب؟</h2>
+    <p>إذا تكررت قراءة الأوكسجين تحت 92%، أو شعرت بضيق نفس أو ألم بالصدر أو دوخة، فلا تنتظر الجهاز وتوجه للطوارئ.</p></div>
+  <p class="disc">هذا المشروع تعليمي، وحساسه الرخيص لا يغني عن أجهزة القياس الطبية المعتمدة ولا عن الطبيب.</p>
+</section>
+</main>
+
+<nav>
+  <a data-v="live" class="act" tabindex="0"><svg viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>المراقبة</a>
+  <a data-v="patient" tabindex="0"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c1-5 15-5 16 0"/></svg>المريض</a>
+  <a data-v="report" tabindex="0"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>التقرير</a>
+  <a data-v="about" tabindex="0"><svg viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h4"/></svg>المشروع</a>
+  <a data-v="link" tabindex="0"><svg viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>الربط</a>
+  <a data-v="med" tabindex="0"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/><rect x="3" y="3" width="18" height="18" rx="4"/></svg>طبي</a>
+</nav>
+
+<script>
+const $=id=>document.getElementById(id);
+const cv=$('cv'),cx=cv.getContext('2d');
+let src='--',client=null,demoTimer=null,lastMsg=0,buf=[],MAX=150,lastBeat=0,hist=[],lastHist=0,lastAlarm=0,actx=null;
+const cssv=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const ls={get(k){try{return JSON.parse(localStorage.getItem(k))}catch(e){return null}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+
+// تنقل
+function show(v){document.querySelectorAll('nav a,.view').forEach(e=>e.classList.remove('act'));document.querySelector('nav a[data-v='+v+']').classList.add('act');$('v-'+v).classList.add('act');window.scrollTo(0,0);if(v==='report')report()}
+document.querySelectorAll('nav a').forEach(a=>{a.onclick=()=>show(a.dataset.v);a.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();show(a.dataset.v)}}});
+
+// الوضع الليلي
+const th=ls.get('nabd_theme');if(th)document.documentElement.dataset.theme=th;
+$('btnTheme').onclick=()=>{const d=document.documentElement,dark=(d.dataset.theme||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light'))==='dark';d.dataset.theme=dark?'light':'dark';ls.set('nabd_theme',d.dataset.theme);draw()};
+
+// إعدادات محفوظة
+const cfg=ls.get('nabd_cfg')||{};if(cfg.broker)$('broker').value=cfg.broker;if(cfg.topic)$('topic').value=cfg.topic;
+$('btnSave').onclick=()=>{ls.set('nabd_cfg',{broker:$('broker').value.trim(),topic:$('topic').value.trim()});setNote('تم حفظ الإعدادات.','')};
+const PF=['pName','pAge','pSex','pW','pH','pChr','pOther','pNote'],CK=['cAll','cDia','cHyp','cAst','cHrt','cKid'];
+const CKN={cAll:'حساسية',cDia:'السكري',cHyp:'ارتفاع ضغط الدم',cAst:'الربو',cHrt:'أمراض القلب',cKid:'أمراض الكلى'};
+function P(){const o={};PF.forEach(i=>o[i]=$(i).value);CK.forEach(i=>o[i]=$(i).checked);return o}
+function chronic(){const p=P();if(p.pChr!=='yes')return p.pChr==='no'?'لا يوجد':'غير محدد';const l=CK.filter(i=>p[i]).map(i=>CKN[i]);if(p.pOther.trim())l.push(p.pOther.trim());return l.length?l.join('، '):'يوجد (غير محدد)'}
+function calc(){
+  const a=+$('pAge').value,w=+$('pW').value,h=+$('pH').value;
+  if(w>0&&h>0){const b=w/Math.pow(h/100,2);$('iBmi').textContent=b.toFixed(1);$('iCls').textContent=b<18.5?'نحافة':b<25?'وزن طبيعي':b<30?'زيادة وزن':'سمنة'}else{$('iBmi').textContent='--';$('iCls').textContent='--'}
+  if(a>0){const m=220-a;$('iMax').textContent=m+' نبضة/د';$('iZone').textContent=Math.round(m*.5)+' - '+Math.round(m*.7)}else{$('iMax').textContent='--';$('iZone').textContent='--'}
+  $('chkBox').style.display=$('pChr').value==='yes'?'':'none';
+}
+const pt=ls.get('nabd_patient2')||{};PF.forEach(i=>$(i).value=pt[i]||'');CK.forEach(i=>$(i).checked=!!pt[i]);calc();
+[...PF,...CK].forEach(i=>{$(i).oninput=$(i).onchange=()=>{ls.set('nabd_patient2',P());calc()}});
+$('snd').checked=!!ls.get('nabd_snd');$('snd').onchange=()=>{ls.set('nabd_snd',$('snd').checked);if($('snd').checked)beep()};
+
+function setStatus(t,c){$('stxt').textContent=t;$('dot').className='dot '+c}
+function setNote(t,c){const m=$('msg');m.textContent=t;m.className='note '+(c||'')}
+function tag(id,t,c){const e=$(id);e.textContent=t;e.className='tag '+c}
+function beat(){const h=$('heart');h.classList.remove('beat');void h.getBoundingClientRect();h.classList.add('beat')}
+const avg=a=>a.length?Math.round(a.reduce((x,y)=>x+y,0)/a.length):'--';
+function beep(){try{actx=actx||new (window.AudioContext||window.webkitAudioContext)();const o=actx.createOscillator(),g=actx.createGain();o.frequency.value=880;g.gain.value=.15;o.connect(g);g.connect(actx.destination);o.start();o.stop(actx.currentTime+.35)}catch(e){}}
+
+function stats(){const b=hist.map(h=>h.bpm),s=hist.map(h=>h.spo);
+  $('sMin').textContent=b.length?Math.min(...b):'--';$('sMax').textContent=b.length?Math.max(...b):'--';$('sAvg').textContent=avg(b);$('sSpo').textContent=avg(s)}
+$('btnReset').onclick=()=>{hist=[];stats()};
+
+function handle(d){
+  lastMsg=Date.now();
+  const arr=Array.isArray(d.ir)?d.ir.map(Number):(d.ir!==undefined?[Number(d.ir)]:[]);
+  arr.forEach(v=>buf.push(v));while(buf.length>MAX)buf.shift();if(arr.length)draw();
+  const ir=arr.length?arr[arr.length-1]:NaN;
+  const finger=isNaN(ir)||ir>=50000;
+  $('finger').textContent=finger?'':'ضع إصبعك على الحساس';
+  if(!finger){$('bpm').textContent='--';$('spo').textContent='--';tag('bpmTag','بلا إصبع','');tag('spoTag','بلا إصبع','');
+    $('lcdPrev').innerHTML='Place finger<br>on sensor';setNote('الحساس لا يلمس الإصبع. ضع إصبعك بلطف على الضوء الأحمر وثبّته.','warn');setStatus('متصل · بلا إصبع','wait');return}
+  setStatus('يستقبل بيانات','on');
+  const bpm=Math.round(Number(d.bpm)),spo=Math.round(Number(d.spo2));
+  let note='القراءات ضمن المعدل المعتاد.',nc='',danger=false;
+  if(bpm>0&&bpm<250){$('bpm').textContent=bpm;if(Date.now()-lastBeat>60000/bpm){lastBeat=Date.now();beat()}
+    if(bpm<60){tag('bpmTag','بطيء','warn')}else if(bpm<=100){tag('bpmTag','طبيعي','ok')}else{tag('bpmTag','سريع','warn');note='النبض سريع. اجلس وارتح دقيقة ثم أعد القياس.';nc='warn'}
+    if(bpm>130||bpm<45)danger=true}
+  if(spo>0&&spo<=100){$('spo').textContent=spo;
+    if(spo>=95){tag('spoTag','طبيعي','ok')}else if(spo>=90){tag('spoTag','منخفض قليلاً','warn');note='الأوكسجين أقل من المعتاد. ثبّت يدك وأعد القياس.';nc='warn'}else{tag('spoTag','منخفض','bad');note='الأوكسجين منخفض ('+spo+'%). أعد القياس، وإن استمر فراجع طبيباً.';nc='bad';danger=true}}
+  if(bpm>0&&spo>0&&Date.now()-lastHist>2000){lastHist=Date.now();hist.push({t:Date.now(),bpm,spo});if(hist.length>1800)hist.shift();stats()}
+  if(danger&&$('snd').checked&&Date.now()-lastAlarm>6000){lastAlarm=Date.now();beep()}
+  $('lcdPrev').innerHTML='BPM: '+(bpm||'--')+'<br>SpO2: '+(spo||'--')+'%';setNote(note,nc);
+}
+
+function line(c,data,lo,hi,color){const x=c.getContext('2d'),w=c.width,h=c.height;x.clearRect(0,0,w,h);if(data.length<2)return;
+  x.strokeStyle=color;x.lineWidth=2.5;x.lineJoin='round';x.beginPath();
+  data.forEach((v,i)=>{const px=i/(data.length-1)*w,py=h-8-((Math.min(Math.max(v,lo),hi)-lo)/(hi-lo))*(h-16);i?x.lineTo(px,py):x.moveTo(px,py)});x.stroke()}
+function draw(){if(buf.length<2)return;const mn=Math.min(...buf),mx=Math.max(...buf);line(cv,buf,mn,mx===mn?mn+1:mx,cssv('--red'))}
+
+function report(){
+  const b=hist.map(h=>h.bpm),s=hist.map(h=>h.spo);
+  $('rMin').textContent=b.length?Math.min(...b):'--';$('rMax').textContent=b.length?Math.max(...b):'--';$('rAvg').textContent=avg(b);$('rSpo').textContent=s.length?Math.min(...s):'--';
+  $('rCount').textContent=b.length+' قراءة';
+  const d=b.length>1?Math.round((hist[hist.length-1].t-hist[0].t)/1000):0;$('rDur').textContent='المدة '+Math.floor(d/60)+':'+String(d%60).padStart(2,'0');
+  line($('chB'),b,40,160,cssv('--red'));line($('chS'),s,85,100,cssv('--blue'));
+  $('rdate').textContent=new Date().toLocaleString('ar-IQ')+(($('pName').value)?' · '+$('pName').value:'');
+  const p=P(),set=(i,v)=>$(i).textContent=v;
+  set('kName',p.pName||'--');set('kAge',p.pAge||'--');set('kSex',{m:'ذكر',f:'أنثى'}[p.pSex]||'--');set('kW',p.pW?p.pW+' kg':'--');set('kH',p.pH?p.pH+' cm':'--');set('kChr',chronic());
+  set('kDate',new Date().toLocaleDateString('ar-IQ'));set('kDur',Math.floor(d/60)+':'+String(d%60).padStart(2,'0'));set('kAvg',b.length?avg(b):'--');
+  set('kRange',b.length?Math.min(...b)+' / '+Math.max(...b):'--');set('kBeats',Math.round(b.reduce((x,y)=>x+y*2/60,0)));set('kSpoAvg',s.length?avg(s)+'%':'--');set('kSrc',src);
+  if(b.length){const lowS=Math.min(...s),a=avg(b);let t='متوسط النبض '+a+' نبضة بالدقيقة ('+(a<60?'أقل من المعتاد':a<=100?'ضمن الطبيعي':'أعلى من المعتاد')+'). أقل أوكسجين '+lowS+'% ('+(lowS>=95?'طبيعي':lowS>=90?'منخفض قليلاً':'منخفض، يُنصح بمراجعة طبيب')+').';if(p.pChr==='yes'&&(p.cHrt||p.cAst)&&(lowS<95||a>100))t+=' لديك مرض مسجل (قلب أو ربو)، فيُنصح بعرض هذه القراءات على طبيبك.';$('rSum').textContent=t}
+}
+$('btnPrint').onclick=()=>{report();window.print()};
+$('btnCsv').onclick=()=>{if(!hist.length){alert('لا توجد قراءات للتصدير.');return}
+  const csv='\ufefftime,bpm,spo2\n'+hist.map(h=>new Date(h.t).toISOString()+','+h.bpm+','+h.spo).join('\n');
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download='nabd-'+Date.now()+'.csv';a.click()};
+
+$('btnImg').onclick=()=>{if(buf.length<2){alert('لا توجد موجة لحفظها.');return}
+  const c=document.createElement('canvas');c.width=cv.width;c.height=cv.height;const x=c.getContext('2d');x.fillStyle=cssv('--card');x.fillRect(0,0,c.width,c.height);x.drawImage(cv,0,0);
+  c.toBlob(bl=>{const a=document.createElement('a');a.href=URL.createObjectURL(bl);a.download='nabd-wave.png';a.click()})};
+function stopAll(){if(client){try{client.end(true)}catch(e){}client=null}if(demoTimer){clearInterval(demoTimer);demoTimer=null}}
+$('btnConnect').onclick=()=>{
+  stopAll();buf=[];const url=$('broker').value.trim(),topic=$('topic').value.trim();
+  if(!url||!topic){setNote('اكتب عنوان الخادم والقناة.','bad');return}
+  if(typeof mqtt==='undefined'){setNote('مكتبة MQTT لم تُحمّل. تأكد من الإنترنت ثم أعد فتح الصفحة.','bad');show('live');return}
+  src='MQTT إنترنت';setStatus('جاري الاتصال...','wait');
+  client=mqtt.connect(url,{clientId:'web_'+Math.random().toString(16).slice(2,8),reconnectPeriod:3000,connectTimeout:8000});
+  client.on('connect',()=>{client.subscribe(topic,err=>{if(err){setNote('فشل الاشتراك بالقناة.','bad')}else{setStatus('متصل · بانتظار الحساس','wait');setNote('تم الاتصال بالقناة «'+topic+'». بانتظار بيانات ESP32.','')}})});
+  client.on('message',(t,m)=>{try{handle(JSON.parse(m.toString()))}catch(e){}});
+  client.on('error',()=>{setStatus('خطأ بالاتصال','off');setNote('تعذر الاتصال بالخادم. تحقق من العنوان والإنترنت.','bad')});
+  client.on('close',()=>{if(client)setStatus('انقطع الاتصال · يعيد المحاولة','off')});
+  show('live');
+};
+$('btnDemo').onclick=()=>{src='وضع التجربة';stopAll();buf=[];let t=0;setStatus('وضع التجربة','wait');
+  demoTimer=setInterval(()=>{t+=0.1;const bpm=72+Math.round(Math.sin(t/5)*3),ph=(t*bpm/60)%1;
+    const ir=85000+Math.exp(-Math.pow((ph-0.15)*9,2))*9000+Math.exp(-Math.pow((ph-0.4)*7,2))*3000+(Math.random()-.5)*300;
+    handle({bpm,spo2:97+Math.round(Math.random()),ir});},33)};
+$('btnStop').onclick=()=>{stopAll();setStatus('غير متصل','');setNote('تم الإيقاف.','')};
+setInterval(()=>{if(client&&!demoTimer&&lastMsg&&Date.now()-lastMsg>6000){setStatus('متصل · لا بيانات من الحساس','wait');setNote('لا تصل بيانات من ESP32. تحقق من الطاقة وWiFi وأن القناة مطابقة.','warn')}},2000);
+</script>
+</body>
+</html>
